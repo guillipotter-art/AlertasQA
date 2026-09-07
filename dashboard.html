@@ -780,6 +780,80 @@
   align-items:start;
 }
 
+.transport-grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:11px;
+  align-items:start;
+}
+
+/* Transporte: transportistas ocupa dos bloques y usa barras verticales */
+.transport-section{
+  grid-template-columns:repeat(3,minmax(0,1fr));
+}
+
+.transport-section .transport-main{
+  grid-column:span 2;
+  height:500px;
+}
+
+.transport-section .transport-side{
+  grid-column:span 1;
+  height:360px;
+}
+
+.transport-section .chart-wrap{
+  height:285px;
+}
+
+.transport-section .transport-main .chart-wrap{
+  height:430px;
+}
+
+.transport-section .chart-title{
+  min-height:28px;
+  line-height:1.25;
+}
+
+@media(max-width:900px){
+  .transport-section{
+    grid-template-columns:1fr 1fr;
+  }
+
+  .transport-section .transport-main{
+    grid-column:span 2;
+  }
+
+  .transport-section .transport-side{
+    grid-column:span 2;
+  }
+}
+
+@media(max-width:700px){
+  .transport-section{
+    grid-template-columns:1fr;
+  }
+
+  .transport-section .transport-main,
+  .transport-section .transport-side{
+    grid-column:span 1;
+    height:340px;
+  }
+
+  .transport-section .chart-wrap,
+  .transport-section .transport-main .chart-wrap{
+    height:275px;
+  }
+}
+
+@media(max-width:700px){
+
+  .transport-grid{
+    grid-template-columns:1fr;
+  }
+
+}
+
 .chart-card{
   background:#fff;
   border:1px solid var(--line);
@@ -2108,6 +2182,35 @@
 
 
   <!-- =======================================================
+      FILA 5 - TRANSPORTE
+  ======================================================= -->
+
+  <section class="charts-grid transport-section">
+
+    <div class="chart-card transport-main">
+      <div class="chart-title">
+        <span class="dot"></span>
+        Alertas por transportista
+      </div>
+      <div class="chart-wrap">
+        <canvas id="grafTransportistas"></canvas>
+      </div>
+    </div>
+
+    <div class="chart-card transport-side">
+      <div class="chart-title">
+        <span class="dot"></span>
+        Principales desviaciones de transporte
+      </div>
+      <div class="chart-wrap">
+        <canvas id="grafDesviacionesTransporte"></canvas>
+      </div>
+    </div>
+
+  </section>
+
+
+  <!-- =======================================================
       FILA 5
   ======================================================= -->
 
@@ -2185,7 +2288,9 @@
 
   ];
 
-  Chart.register(ChartDataLabels);
+  if(typeof ChartDataLabels !== "undefined"){
+    Chart.register(ChartDataLabels);
+  }
 
   /* =========================================================
     MATRIZ DE CRITICIDAD
@@ -2347,7 +2452,8 @@
   let chartEmergentes = null;
   let chartHallazgos = null;
   let chartRiskScore = null;
-
+let chartTransportistas = null;
+  let chartDesviacionesTransporte = null;
 
   const selecciones = {
 
@@ -5178,6 +5284,299 @@ if(selector){
 
   }
 
+function crearGraficaTransportistas(datos){
+
+  destruirChart(chartTransportistas);
+  chartTransportistas = null;
+
+  const canvas = document.getElementById("grafTransportistas");
+  if(!canvas){
+    console.warn("No existe #grafTransportistas en el HTML.");
+    return;
+  }
+
+  const mapa = {};
+
+  datos.forEach(r => {
+
+    const clasificacion =
+      normalizar(
+        obtenerCampo(r,"clasificacion")
+      );
+
+    if(clasificacion !== "TRANSPORTE"){
+      return;
+    }
+
+    const linea =
+      normalizar(
+        obtenerCampo(r,"linea_transportista")
+      );
+
+    if(!linea){
+      return;
+    }
+
+    mapa[linea] =
+      (mapa[linea] || 0) + 1;
+
+  });
+
+  const resultados = Object.entries(mapa)
+  .map(([nombre,total]) => ({
+    nombre,
+    total
+  }))
+  .sort((a,b) => b.total - a.total)
+  .slice(0,20);   // SOLO TOP 20
+
+  chartTransportistas = new Chart(
+
+    canvas,
+
+    {
+      type:"bar",
+
+      data:{
+        labels:
+          resultados.map(x => x.nombre),
+
+        datasets:[{
+
+          data:
+            resultados.map(x => x.total),
+
+          backgroundColor:
+            resultados.map(
+              (_,i)=>
+                PALETTE[
+                  i % PALETTE.length
+                ]
+            ),
+
+          borderRadius:6
+
+        }]
+      },
+
+      options:{
+
+        responsive:true,
+        maintainAspectRatio:false,
+
+        indexAxis:"x",
+
+        layout:{
+          padding:{
+            top:10,
+            right:16,
+            bottom:8,
+            left:8
+          }
+        },
+
+        plugins:{
+
+          legend:{
+            display:false
+          },
+
+          datalabels:{
+            color:"#333",
+            anchor:"end",
+            align:"top",
+            offset:4,
+            clamp:true,
+            clip:false,
+            font:{
+              size:11,
+              weight:"bold"
+            },
+            formatter:(value)=>
+              Number(value).toLocaleString("es-MX")
+          }
+
+        },
+
+        scales:{
+          y:{
+            beginAtZero:true,
+            ticks:{
+              precision:0,
+              padding:6
+            },
+            grid:{
+              color:"rgba(0,0,0,.07)"
+            }
+          },
+
+x:{
+  grid:{
+    display:false
+  },
+  ticks:{
+    autoSkip:false,
+    maxRotation:90,
+    minRotation:90,
+    padding:5,
+    font:{
+      family:'-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif',
+      size:9,
+      weight:"700"
+    }
+  }
+}
+        }
+
+      }
+
+    }
+
+  );
+
+}
+
+
+function crearGraficaDesviacionesTransporte(datos){
+
+  destruirChart(chartDesviacionesTransporte);
+  chartDesviacionesTransporte = null;
+
+  const canvas = document.getElementById("grafDesviacionesTransporte");
+  if(!canvas){
+    console.warn("No existe #grafDesviacionesTransporte en el HTML.");
+    return;
+  }
+
+  const mapa = {};
+
+  datos.forEach(r => {
+
+    const clasificacion =
+      normalizar(
+        obtenerCampo(r,"clasificacion")
+      );
+
+    if(clasificacion !== "TRANSPORTE"){
+      return;
+    }
+
+    const hallazgo =
+      normalizar(
+        obtenerCampo(r,"hallazgo")
+      );
+
+    if(!hallazgo){
+      return;
+    }
+
+    mapa[hallazgo] =
+      (mapa[hallazgo] || 0) + 1;
+
+  });
+
+  const resultados =
+    Object.entries(mapa)
+
+      .map(([nombre,total]) => ({
+        nombre,
+        total
+      }))
+
+      .sort((a,b)=>b.total-a.total)
+
+      .slice(0,10);
+
+  chartDesviacionesTransporte =
+    new Chart(
+
+      canvas,
+
+      {
+
+        type:"bar",
+
+        data:{
+
+          labels:
+            resultados.map(
+              x=>truncar(x.nombre,22)
+            ),
+
+          datasets:[{
+
+            data:
+              resultados.map(
+                x=>x.total
+              ),
+
+            backgroundColor:
+              resultados.map(
+                (_,i)=>
+                  PALETTE[
+                    i % PALETTE.length
+                  ]
+              ),
+
+            borderRadius:6
+
+          }]
+
+        },
+
+        options:{
+
+          responsive:true,
+          maintainAspectRatio:false,
+
+          indexAxis:"y",
+
+          layout:{
+            padding:{
+              right:35
+            }
+          },
+
+          plugins:{
+
+            legend:{
+              display:false
+            },
+
+            datalabels:{
+              color:"#333",
+              anchor:"end",
+              align:"right",
+              offset:4,
+              font:{
+                weight:"bold"
+              }
+            }
+
+          },
+
+          scales:{
+
+            x:{
+              beginAtZero:true
+            },
+
+            y:{
+              grid:{
+                display:false
+              }
+            }
+
+          }
+
+        }
+
+      }
+
+    );
+
+}
+
   /* =========================================================
     HORA DEL EVENTO
   ========================================================= */
@@ -5747,6 +6146,15 @@ if(selector){
     datos
   );
 
+
+    
+    crearGraficaTransportistas(
+      datos
+    );
+
+    crearGraficaDesviacionesTransporte(
+      datos
+    );
 
     crearHeatMap(
       datos
